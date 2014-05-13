@@ -12,8 +12,7 @@ type CompressedText = [Chunk]
 main = do
     (text:_)   <- getArgs
     compressed <- readFile text
-    let parsedInput = parseInput compressed
-    putStr $ fromMaybe "Error: Input resulted in a nothing.\n" $ fixHyphens . decompressText $ parsedInput
+    putStr $ fromMaybe "Error: Input resulted in a nothing.\n" $ fixHyphens . decompressText . parseInput $ compressed
 
 fixHyphens :: Maybe String -> Maybe String
 fixHyphens x = liftA (unpack . replace (pack "- ") (pack "-")) $ liftA pack x
@@ -34,12 +33,11 @@ decompressText (m, t) = liftA assembleChunks . sequence $ decompressed
 
 parseChunks :: M.Map Int String -> Chunk -> Maybe String
 parseChunks m s 
-    | s =~ "[0-9]+!"   = liftA handleUpper . findValue $ s
+    | s =~ "[0-9]+!"   = liftA (map C.toUpper) . findValue $ s
     | s =~ "[0-9]+\\^" = liftA capitalize . findValue $ s
     | s =~ "[0-9]+"    = M.lookup (read s) m  
     | s =~ "[!?.,;:-]" = Just s
     | s =~ "[RE]"      = Just "\n"
     | otherwise        = Nothing
         where findValue t       = M.lookup (read . init $ t) m
-              handleUpper       = unpack . toUpper . pack
               capitalize (x:xs) = C.toUpper x : xs
