@@ -8,6 +8,7 @@ import Text.Regex.Posix
 
 type Chunk          = String
 type CompressedText = [Chunk]
+type CompressionMap = M.Map Int String
 
 main = do
     (text:_)   <- getArgs
@@ -17,13 +18,13 @@ main = do
 fixHyphens :: Maybe String -> Maybe String
 fixHyphens x = liftA (unpack . replace (pack "- ") (pack "-")) $ liftA pack x
 
-parseInput :: String -> (M.Map Int String, CompressedText)
+parseInput :: String -> (CompressionMap, CompressedText)
 parseInput x = (dict x, phrase x)
     where splitInput x = splitAt (read . head . lines $ x) . tail . lines $ x
           dict         = M.fromList . zip [0..] . fst . splitInput
           phrase       = words . concat . snd . splitInput
 
-decompressText :: (M.Map Int String, CompressedText) -> Maybe String
+decompressText :: (CompressionMap, CompressedText) -> Maybe String
 decompressText (m, t) = liftA assembleChunks . sequence $ decompressed
     where decompressed     = map (parseChunks m) t
           assembleChunks   = foldl wordsPunctuation ""
@@ -31,7 +32,7 @@ decompressText (m, t) = liftA assembleChunks . sequence $ decompressed
             | x =~ "[!,.;:\n\r-]" = acc ++ x
             | otherwise           = acc ++ " " ++ x
 
-parseChunks :: M.Map Int String -> Chunk -> Maybe String
+parseChunks :: CompressionMap -> Chunk -> Maybe String
 parseChunks m s 
     | s =~ "[0-9]+!"   = liftA (map C.toUpper) . findValue $ s
     | s =~ "[0-9]+\\^" = liftA capitalize . findValue $ s
