@@ -1,44 +1,32 @@
-import qualified Data.Char as C
-import qualified Data.Map.Lazy as M
-import Control.Applicative (liftA)
-import Data.Maybe (fromMaybe)
-import Data.Text.Lazy (toUpper, replace, pack, unpack)
-import System.Environment (getArgs)
+import qualified Data.Char as C (toLower)
+import qualified Data.List as L (nub, intercalate)
+import qualified Data.Map as M (Map, lookup, fromList, toList)
 import Text.Regex.Posix
+import Data.Maybe (fromMaybe)
+import Data.List.Split (splitOn)
 
-type Chunk          = String
-type CompressedText = [Chunk]
-type CompressionMap = M.Map Int String
+type CompressionMap = M.Map String Int
 
-main = do
-    (text:_)   <- getArgs
-    compressed <- readFile text
-    putStr $ fromMaybe "Error: Input resulted in a nothing.\n" $ fixHyphens . decompressText . parseInput $ compressed
+buildCompressionDict :: String -> CompressionMap 
+buildCompressionDict = M.fromList . flip zip [0..] . uniques 
+    where uniques = L.nub . words . map C.toLower . filter (`notElem` ".,:;!?")
 
-fixHyphens :: Maybe String -> Maybe String
-fixHyphens x = liftA (unpack . replace (pack "- ") (pack "-")) $ liftA pack x
+compressChunk :: CompressionMap -> [String] -> String
+compressChunk m t = unwords . map runCompression $ t
+    where runCompression s
+            | s =~ "[A-Z][a-z]*"  = compressed s ++ "^"
+            | s =~ "[A-Z]+"       = compressed s ++ "!"
+            | s =~ "[a-zA-Z]+\\." = compressed s ++ " " ++ "."
+            | s =~ "[a-zA-Z]+\\;" = compressed s ++ " " ++ ";"
+            | s =~ "[a-zA-Z]+\\:" = compressed s ++ " " ++ ":"
+            | s =~ "[a-zA-Z]+\\," = compressed s ++ " " ++ ","
+            | s =~ "[a-zA-Z]+\\?" = compressed s ++ " " ++ "?"
+            | s =~ "[a-zA-Z]+\\!" = compressed s ++ " " ++ "!"
+            | s =~ "[a-zA-Z]+-[a-zA-Z]+" = hyphenHandler $ (\([x, y]) -> (x,y)) . splitOn "-" $ s
+            | otherwise           = compressed 
+                where compressed  = show . fromMaybe (-1) . flip M.lookup m . justTheWord 
+                      justTheWord = map C.toLower . filter (`notElem` ".,:;!?") 
+                      hyphenHandler x = (compressed . fst $ x) ++ " - " ++ (compressed . snd $ x)
 
-parseInput :: String -> (CompressionMap, CompressedText)
-parseInput x = (dict x, phrase x)
-    where splitInput x = splitAt (read . head . lines $ x) . tail . lines $ x
-          dict         = M.fromList . zip [0..] . fst . splitInput
-          phrase       = words . concat . snd . splitInput
-
-decompressText :: (CompressionMap, CompressedText) -> Maybe String
-decompressText (m, t) = liftA assembleChunks . sequence $ decompressed
-    where decompressed     = map (parseChunks m) t
-          assembleChunks   = foldl wordsPunctuation ""
-          wordsPunctuation acc x 
-            | x =~ "[!,.;:\n\r-]" = acc ++ x
-            | otherwise           = acc ++ " " ++ x
-
-parseChunks :: CompressionMap -> Chunk -> Maybe String
-parseChunks m s 
-    | s =~ "[0-9]+!"   = liftA (map C.toUpper) . findValue $ s
-    | s =~ "[0-9]+\\^" = liftA capitalize . findValue $ s
-    | s =~ "[0-9]+"    = M.lookup (read s) m  
-    | s =~ "[!?.,;:-]" = Just s
-    | s =~ "[RE]"      = Just "\n"
-    | otherwise        = Nothing
-        where findValue t       = M.lookup (read . init $ t) m
-              capitalize (x:xs) = C.toUpper x : xs
+compressText :: CompressionMap -> String -> String
+compressText m t = L.intercalate " R " . map (compressChunk m . words) . lines $ t 
