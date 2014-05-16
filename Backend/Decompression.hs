@@ -1,3 +1,7 @@
+module Backend.Decompression
+  ( runDecompression
+  ) where
+
 import qualified Data.Char as C
 import qualified Data.Map.Lazy as M
 import Control.Applicative (liftA)
@@ -10,9 +14,8 @@ type CompressedText = [Chunk]
 type DecompressionMap = M.Map Int String
 type CompressionMap = M.Map String Int
 
-main = do
-    compressed <- getContents
-    putStr $ fromMaybe "Error: Input resulted in a nothing.\n" $ fixHyphens . decompressText . parseCompressedInput $ compressed
+runDecompression :: String -> String
+runDecompression s = fromMaybe "Error: Input resulted in a nothing.\n" $ fixHyphens . decompressText . parseCompressedInput $ s
 
 fixHyphens :: Maybe String -> Maybe String
 fixHyphens x = liftA (unpack . replace (pack "- ") (pack "-")) $ liftA pack x
@@ -28,8 +31,10 @@ decompressText (m, t) = liftA assembleChunks . sequence $ decompressed
     where decompressed     = map (parseChunks m) t
           assembleChunks   = foldl wordsPunctuation ""
           wordsPunctuation acc x 
-            | x =~ "[!,.;:\n\r-]" = acc ++ x
-            | otherwise           = acc ++ " " ++ x
+            | acc == ""              = acc ++ x
+            | x =~ "[\\?!,.;:\n\r-]" = acc ++ x
+            | last acc == '\n'       = acc ++ x          
+            | otherwise              = acc ++ " " ++ x
 
 parseChunks :: DecompressionMap -> Chunk -> Maybe String
 parseChunks m s 
